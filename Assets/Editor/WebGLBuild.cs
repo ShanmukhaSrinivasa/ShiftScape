@@ -2,6 +2,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 
@@ -49,6 +50,8 @@ public static class WebGLBuild
         }
 
         PlayerSettings.productName = "ShiftScape";
+        PlayerSettings.stripEngineCode = true;
+        PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.WebGL, ManagedStrippingLevel.High);
         // itch.io serves files without Content-Encoding headers, so the loader must decompress gzip itself.
         PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
         PlayerSettings.WebGL.decompressionFallback = true;
