@@ -134,17 +134,19 @@ namespace ShiftScape.Game
             return Mathf.Sqrt(fx * fx + fy * fy);
         }
 
-        static Sprite Make(Color32[] pixels, int size, string name)
+        internal static Sprite Make(Color32[] pixels, int size, string name,
+            FilterMode filter = FilterMode.Point, float pixelsPerUnit = 0f, Vector4 border = default)
         {
             var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
             {
                 name = name,
-                filterMode = FilterMode.Point,
+                filterMode = filter,
                 wrapMode = TextureWrapMode.Clamp,
             };
             texture.SetPixels32(pixels);
             texture.Apply(false, true);
-            Sprite sprite = Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+            Sprite sprite = Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f),
+                pixelsPerUnit > 0f ? pixelsPerUnit : size, 0, SpriteMeshType.FullRect, border);
             sprite.name = name;
             return sprite;
         }
