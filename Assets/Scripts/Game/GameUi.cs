@@ -12,7 +12,11 @@ namespace ShiftScape.Game
         // The canvas is laid out on a 1080x1080 reference that expands to fit both landscape and portrait.
         public const float ReferenceSize = 1080f;
         public const float TopBarHeight = 190f;
-        public const float BottomBarHeight = 190f;
+        public const float BottomBarHeight = 250f;
+
+        const int GridColumns = 6;
+        static readonly Vector2 GridCell = new Vector2(140f, 165f);
+        const float GridSpacing = 18f;
 
         public event Action PlayClicked, LevelsClicked, BackClicked;
         public event Action UndoClicked, RestartClicked, NextClicked, ReplayClicked;
@@ -24,7 +28,7 @@ namespace ShiftScape.Game
 
         Transform root;
         GameObject title, levelSelect, hud, win;
-        Text titleStars, levelSelectStars, hudLevel, hudMoves, winInfo, nextLabel;
+        Text titleStars, levelSelectStars, hudLevel, hudMoves, hudHint, winInfo, nextLabel;
         RectTransform levelGrid;
         Image[] winStars;
         Button undoButton;
@@ -81,6 +85,7 @@ namespace ShiftScape.Game
         {
             hudLevel.text = $"{levelIndex + 1}. {session.Name}";
             hudMoves.text = $"Moves {session.MoveCount}     Par {session.Par}";
+            hudHint.text = session.Hint;
         }
 
         public void SetUndoEnabled(bool enabled)
@@ -127,20 +132,20 @@ namespace ShiftScape.Game
             levelSelect = UiFactory.NewRect("Level Select", root).Stretch().gameObject;
             Transform t = levelSelect.transform;
             UiFactory.NewLabel("Heading", t, "Levels", 80, UiFactory.Ink, TextAnchor.MiddleCenter, FontStyle.Bold)
-                .rectTransform.Place(Top, new Vector2(0f, -100f), new Vector2(800f, 110f));
+                .rectTransform.Place(Top, new Vector2(0f, -85f), new Vector2(800f, 110f));
             levelSelectStars = StarTotal(t, new Vector2(0f, 0f));
-            levelSelectStars.transform.parent.GetComponent<RectTransform>().Place(Top, new Vector2(0f, -185f), new Vector2(300f, 60f));
+            levelSelectStars.transform.parent.GetComponent<RectTransform>().Place(Top, new Vector2(0f, -165f), new Vector2(300f, 60f));
 
-            levelGrid = UiFactory.NewRect("Grid", t).Place(Center, new Vector2(0f, -10f), new Vector2(946f, 648f));
+            levelGrid = UiFactory.NewRect("Grid", t);
             var layout = levelGrid.gameObject.AddComponent<GridLayoutGroup>();
-            layout.cellSize = new Vector2(170f, 200f);
-            layout.spacing = new Vector2(24f, 24f);
+            layout.cellSize = GridCell;
+            layout.spacing = new Vector2(GridSpacing, GridSpacing);
             layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            layout.constraintCount = 5;
+            layout.constraintCount = GridColumns;
             layout.childAlignment = TextAnchor.UpperCenter;
 
             UiFactory.NewButton("Back", t, "Back", UiFactory.Secondary, UiFactory.Ink, 44, () => BackClicked?.Invoke())
-                .GetComponent<RectTransform>().Place(Bottom, new Vector2(0f, 100f), new Vector2(320f, 110f));
+                .GetComponent<RectTransform>().Place(Bottom, new Vector2(0f, 75f), new Vector2(300f, 100f));
         }
 
         void RebuildLevelGrid()
@@ -154,6 +159,11 @@ namespace ShiftScape.Game
             }
 
             var levels = LevelLibrary.Levels;
+            int rows = (levels.Count + GridColumns - 1) / GridColumns;
+            levelGrid.Place(Center, new Vector2(0f, -25f), new Vector2(
+                GridColumns * GridCell.x + (GridColumns - 1) * GridSpacing,
+                rows * GridCell.y + (rows - 1) * GridSpacing));
+
             for (int i = 0; i < levels.Count; i++)
             {
                 int index = i;
@@ -164,15 +174,15 @@ namespace ShiftScape.Game
                 cell.interactable = unlocked;
                 Transform c = cell.transform;
 
-                UiFactory.NewLabel("Number", c, (i + 1).ToString(), 72, unlocked ? UiFactory.Ink : new Color(0.14f, 0.2f, 0.26f, 0.45f),
-                    TextAnchor.MiddleCenter, FontStyle.Bold).rectTransform.Place(Center, new Vector2(0f, 26f), new Vector2(160f, 100f));
+                UiFactory.NewLabel("Number", c, (i + 1).ToString(), 60, unlocked ? UiFactory.Ink : new Color(0.14f, 0.2f, 0.26f, 0.45f),
+                    TextAnchor.MiddleCenter, FontStyle.Bold).rectTransform.Place(Center, new Vector2(0f, 22f), new Vector2(130f, 90f));
 
-                RectTransform footer = UiFactory.NewRect("Footer", c).Place(Center, new Vector2(0f, -58f), new Vector2(160f, 50f));
+                RectTransform footer = UiFactory.NewRect("Footer", c).Place(Center, new Vector2(0f, -50f), new Vector2(130f, 44f));
                 if (unlocked)
-                    UiFactory.SetStars(UiFactory.NewStarRow(footer, 40f, 4f), ProgressStore.Stars(levels[i]));
+                    UiFactory.SetStars(UiFactory.NewStarRow(footer, 34f, 3f), ProgressStore.Stars(levels[i]));
                 else
                     UiFactory.NewImage("Padlock", footer, TileSpriteFactory.Padlock, Color.white)
-                        .rectTransform.Place(Center, Vector2.zero, new Vector2(56f, 56f));
+                        .rectTransform.Place(Center, Vector2.zero, new Vector2(48f, 48f));
             }
         }
 
@@ -184,6 +194,8 @@ namespace ShiftScape.Game
             hudLevel.rectTransform.Place(Top, new Vector2(0f, -70f), new Vector2(1000f, 80f));
             hudMoves = UiFactory.NewLabel("Moves", t, "", 40, UiFactory.Ink);
             hudMoves.rectTransform.Place(Top, new Vector2(0f, -140f), new Vector2(1000f, 56f));
+            hudHint = UiFactory.NewLabel("Hint", t, "", 34, new Color(0.14f, 0.2f, 0.26f, 0.85f), TextAnchor.MiddleCenter, FontStyle.Italic);
+            hudHint.rectTransform.Place(Bottom, new Vector2(0f, 205f), new Vector2(1000f, 50f));
 
             var size = new Vector2(280f, 112f);
             UiFactory.NewButton("Levels", t, "Levels", UiFactory.Secondary, UiFactory.Ink, 42, () => LevelsClicked?.Invoke())

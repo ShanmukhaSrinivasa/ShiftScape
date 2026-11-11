@@ -21,6 +21,7 @@ namespace ShiftScape.Game
         {
             public Transform Transform;
             public SpriteRenderer Renderer;
+            public Tile Data;
         }
 
         Board board;
@@ -31,6 +32,8 @@ namespace ShiftScape.Game
         public bool IsBusy { get; private set; }
         public int Width => board.Width;
         public int Height => board.Height;
+        public bool HasLockedRow { get; private set; }
+        public bool HasLockedColumn { get; private set; }
 
         public void Build(Board source)
         {
@@ -54,10 +57,19 @@ namespace ShiftScape.Game
             for (int x = 0; x < Width; x++)
                 grid[y * Width + x] = CreateTile(board[x, y], CellLocal(x, y));
 
+            HasLockedRow = HasLockedColumn = false;
             for (int y = 0; y < Height; y++)
-                if (board.IsRowLocked(y)) CreateLockedLine(true, y);
+            {
+                if (!board.IsRowLocked(y)) continue;
+                CreateLockedLine(true, y);
+                HasLockedRow = true;
+            }
             for (int x = 0; x < Width; x++)
-                if (board.IsColumnLocked(x)) CreateLockedLine(false, x);
+            {
+                if (!board.IsColumnLocked(x)) continue;
+                CreateLockedLine(false, x);
+                HasLockedColumn = true;
+            }
 
             CreateMarker("Start", TileSpriteFactory.StartMarker, board.Start, MarkerOrder);
             CreateMarker("Goal", TileSpriteFactory.GoalMarker, board.Goal, MarkerOrder);
@@ -84,6 +96,7 @@ namespace ShiftScape.Game
         public IEnumerator WalkPath(List<GridPos> path)
         {
             IsBusy = true;
+            Collect(path[0]);
             for (int i = 1; i < path.Count; i++)
             {
                 Vector3 from = CellLocal(path[i - 1].X, path[i - 1].Y);
@@ -94,9 +107,31 @@ namespace ShiftScape.Game
                     yield return null;
                 }
                 walker.localPosition = to;
+                Collect(path[i]);
             }
             foreach (GridPos p in path) grid[p.Y * Width + p.X].Renderer.color = SolvedTint;
             IsBusy = false;
+        }
+
+        // Only the visuals change; the board keeps its crystals so restart and undo stay consistent.
+        void Collect(GridPos cell)
+        {
+            TileView tile = grid[cell.Y * Width + cell.X];
+            if (!tile.Data.HasCrystal) return;
+            tile.Data = tile.Data.WithoutCrystal;
+            tile.Renderer.sprite = TileSpriteFactory.Tile(tile.Data);
+            StartCoroutine(Pop(tile.Transform));
+        }
+
+        static IEnumerator Pop(Transform target)
+        {
+            const float seconds = 0.2f;
+            for (float t = 0f; t < 1f; t += Time.deltaTime / seconds)
+            {
+                target.localScale = Vector3.one * (1f + 0.18f * Mathf.Sin(t * Mathf.PI));
+                yield return null;
+            }
+            target.localScale = Vector3.one;
         }
 
         IEnumerator ShiftRoutine(ShiftMove move)
@@ -134,7 +169,7 @@ namespace ShiftScape.Game
                 }
                 // The wrapping tile slides out past one edge while a copy slides in from the other.
                 to[k] = LineLocal(move, move.Step > 0 ? length : -1);
-                TileView ghost = CreateTile(movers[k].Renderer.sprite, LineLocal(move, move.Step > 0 ? -1 : length));
+                TileView ghost = CreateTile(movers[k].Data, LineLocal(move, move.Step > 0 ? -1 : length));
                 ghost.Renderer.color = movers[k].Renderer.color;
                 ghosts.Add(ghost);
                 ghostFrom.Add(ghost.Transform.localPosition);
@@ -168,18 +203,16 @@ namespace ShiftScape.Game
 
         Vector3 LineLocal(ShiftMove move, int i) => move.IsRow ? CellLocal(i, move.Index) : CellLocal(move.Index, i);
 
-        TileView CreateTile(Tile tile, Vector3 local) => CreateTile(TileSpriteFactory.Tile(tile.Exits), local);
-
-        TileView CreateTile(Sprite sprite, Vector3 local)
+        TileView CreateTile(Tile tile, Vector3 local)
         {
             var go = new GameObject("Tile");
             go.transform.SetParent(content, false);
             go.transform.localPosition = local;
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = sprite;
+            sr.sprite = TileSpriteFactory.Tile(tile);
             sr.sortingOrder = TileOrder;
             sr.maskInteraction = SpriteMaskInteraction.VisibleInsideMask;
-            return new TileView { Transform = go.transform, Renderer = sr };
+            return new TileView { Transform = go.transform, Renderer = sr, Data = tile };
         }
 
         void CreateLockedLine(bool isRow, int index)

@@ -11,7 +11,9 @@ namespace ShiftScape.Game
         enum AppState { Title, LevelSelect, Playing }
 
         const float DragThreshold = 0.3f;
-        const float BoardPadding = 0.95f;
+        // Padlock icons sit outside the board at the ends of locked lines and need the extra room.
+        const float PaddingWithLocks = 0.95f;
+        const float PaddingPlain = 0.3f;
 
         Camera cam;
         BoardView view;
@@ -171,6 +173,13 @@ namespace ShiftScape.Game
                 if (state == AppState.Playing) ShowLevelSelect();
                 else if (state == AppState.LevelSelect) ShowTitle();
             }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (k.f9Key.wasPressedThisFrame)
+            {
+                ProgressStore.UnlockAll = !ProgressStore.UnlockAll;
+                if (state == AppState.LevelSelect) ui.ShowLevelSelect();
+            }
+#endif
             if (state != AppState.Playing) return;
             if (k.rKey.wasPressedThisFrame) Restart();
             if (k.zKey.wasPressedThisFrame || k.uKey.wasPressedThisFrame || k.backspaceKey.wasPressedThisFrame) Undo();
@@ -188,15 +197,21 @@ namespace ShiftScape.Game
                 dragging = !session.IsSolved && view.TryWorldToCell(world, out dragCell);
                 dragStartWorld = world;
             }
-            if (!pointer.press.isPressed)
+            // A quick flick can press, move and release within a frame or two, so the release frame counts too.
+            bool released = pointer.press.wasReleasedThisFrame;
+            if (!dragging || (!pointer.press.isPressed && !released)) return;
+            if (view.IsBusy)
             {
-                dragging = false;
+                if (released) dragging = false;
                 return;
             }
-            if (!dragging || view.IsBusy) return;
 
             Vector3 delta = world - dragStartWorld;
-            if (delta.magnitude < DragThreshold) return;
+            if (delta.magnitude < DragThreshold)
+            {
+                if (released) dragging = false;
+                return;
+            }
 
             ShiftMove move = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y)
                 ? ShiftMove.Row(dragCell.Y, delta.x > 0f ? 1 : -1)
@@ -240,8 +255,8 @@ namespace ShiftScape.Game
             float bottomPx = GameUi.BottomBarHeight * pixelsPerUnit;
             float availablePx = Mathf.Max(1f, Screen.height - topPx - bottomPx);
 
-            float boardHeight = view.Height + BoardPadding * 2f;
-            float boardWidth = view.Width + BoardPadding * 2f;
+            float boardHeight = view.Height + (view.HasLockedColumn ? PaddingWithLocks : PaddingPlain) * 2f;
+            float boardWidth = view.Width + (view.HasLockedRow ? PaddingWithLocks : PaddingPlain) * 2f;
             float sizeByHeight = boardHeight * Screen.height / (2f * availablePx);
             float sizeByWidth = boardWidth / (2f * cam.aspect * 0.94f);
             cam.orthographicSize = Mathf.Max(sizeByHeight, sizeByWidth);

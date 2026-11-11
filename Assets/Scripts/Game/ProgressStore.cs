@@ -15,8 +15,11 @@ namespace ShiftScape.Game
         public static int Stars(LevelData level) =>
             IsCompleted(level) ? StarRating.For(BestMoves(level), level.Par) : 0;
 
+        // Testing aid only; toggled from the keyboard in the editor and development builds.
+        public static bool UnlockAll { get; set; }
+
         public static bool IsUnlocked(int index) =>
-            index == 0 || IsCompleted(LevelLibrary.Levels[index - 1]);
+            UnlockAll || index == 0 || IsCompleted(LevelLibrary.Levels[index - 1]);
 
         public static void RecordWin(LevelData level, int moves)
         {

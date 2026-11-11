@@ -12,6 +12,7 @@ namespace ShiftScape.Core
         public int MoveCount => history.Count;
         public int Par => level.Par;
         public string Name => level.Name;
+        public string Hint => level.Hint;
         public bool IsSolved { get; private set; }
         public bool CanUndo => history.Count > 0 && !IsSolved;
 

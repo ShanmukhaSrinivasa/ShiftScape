@@ -10,6 +10,7 @@ namespace ShiftScape.Core
 par: 1
 start: 0,1
 goal: 2,1
+hint: Drag a column up or down to connect the path.
 grid:
 .    .    L
 R    RL   .
@@ -19,6 +20,7 @@ R    RL   .
 par: 1
 start: 0,0
 goal: 0,2
+hint: Rows slide left and right too.
 grid:
 D    .    .
 .    UD   RL
@@ -28,6 +30,7 @@ U    .    .",
 par: 2
 start: 0,0
 goal: 2,0
+hint: A tile that slides off one edge comes back on the other.
 grid:
 .    D    UL
 UR   RL   .
@@ -87,6 +90,7 @@ par: 3
 start: 0,3
 goal: 3,0
 lockedColumns: 3
+hint: Padlocked lines can't slide.
 grid:
 URD  .    D    D
 RD   RL   RL   UL
@@ -115,6 +119,57 @@ RD   DL   .    L
 RD   RD   RL   U
 UR   UR   .    UL",
 
+@"name: Bolted
+par: 1
+start: 0,1
+goal: 2,1
+hint: Bolted tiles stay put. The others hop over them.
+grid:
+.    UD    .
+L    RL*   R
+.    UD    .",
+
+@"name: Bolted Down
+par: 3
+start: 0,2
+goal: 3,2
+grid:
+RL    UD    .     RD
+U     .     RL    DL
+UDL   .*    UR    U
+UD*   RL    RL    R",
+
+@"name: Shine Bright
+par: 1
+start: 0,0
+goal: 2,0
+hint: Pass through every crystal on the way to the goal.
+grid:
+RD    RL    DL
+RL+   UL    UR
+.     .     .",
+
+@"name: Glimmer
+par: 3
+start: 0,3
+goal: 3,0
+grid:
+UDL   RD    RL+   UL
+RDL   UD    URL   L
+UL    UR    DL    DL
+UD    .     R     RL",
+
+@"name: Geode
+par: 4
+start: 0,1
+goal: 3,3
+lockedColumns: 2
+grid:
+UR    L     DL    U
+UD    DL+   UD    RDL
+DL    UD+   URD*  UR
+UD    RL    L     RD",
+
 @"name: Tectonic
 par: 4
 start: 0,0
@@ -128,6 +183,18 @@ UD   UR   RD   .    UD
 UR   DL   RL   URL  UD
 RL   UR   R    UR   UL",
 
+@"name: Crystal Cavern
+par: 4
+start: 0,1
+goal: 4,2
+lockedRows: 2
+grid:
+D     UR+   RD    .     RD*
+UR    .     R     URD   URL
+RD    RL    UR    R     D
+L     DL    RL    RD+   D
+UL    UD    UD    UL    UL",
+
 @"name: Continental Drift
 par: 5
 start: 0,2
@@ -140,6 +207,19 @@ R    UL   DL   RD   RL
 UL   L    UD   RL   UD
 UL   L    RD   UD   .
 UR   UL   UR   UDL  L",
+
+@"name: Heart of the Earth
+par: 5
+start: 0,2
+goal: 4,2
+lockedRows: 1
+lockedColumns: 1
+grid:
+DL    .     .     D     .
+UD    .     RL    UD    RD*
+RL    .     DL*   UD    R
+.     UR+   DL    UL    UDL
+UR    .     RD    UR    UR+",
         };
 
         static List<LevelData> levels;

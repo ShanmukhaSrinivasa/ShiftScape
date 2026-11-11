@@ -15,15 +15,30 @@ namespace ShiftScape.Game
         static readonly Color32 GroundSpeck = new Color32(134, 170, 106, 255);
         static readonly Color32 PathEdge = new Color32(120, 88, 56, 255);
         static readonly Color32 PathFill = new Color32(226, 200, 146, 255);
+        static readonly Color32 StoneBorder = new Color32(78, 82, 92, 255);
+        static readonly Color32 Stone = new Color32(134, 138, 146, 255);
+        static readonly Color32 StoneSpeck = new Color32(150, 154, 162, 255);
+        static readonly Color32 Bolt = new Color32(206, 208, 216, 255);
+        static readonly Color32 BoltEdge = new Color32(60, 62, 70, 255);
+        static readonly Color32 CrystalFill = new Color32(88, 214, 236, 255);
+        static readonly Color32 CrystalLight = new Color32(196, 248, 255, 255);
+        static readonly Color32 CrystalEdge = new Color32(22, 92, 124, 255);
 
-        static readonly Dictionary<Direction, Sprite> tileCache = new Dictionary<Direction, Sprite>();
+        static readonly Dictionary<int, Sprite> tileCache = new Dictionary<int, Sprite>();
         static Sprite white, start, goal, walker, padlock;
 
-        public static Sprite Tile(Direction exits)
+        public static Sprite Tile(Tile tile)
         {
-            if (tileCache.TryGetValue(exits, out Sprite cached)) return cached;
-            var pixels = new Color32[Size * Size];
+            int key = (int)tile.Exits | (tile.IsFixed ? 16 : 0) | (tile.HasCrystal ? 32 : 0);
+            if (tileCache.TryGetValue(key, out Sprite cached)) return cached;
+
+            Direction exits = tile.Exits;
             bool hasPath = exits != Direction.None;
+            Color32 border = tile.IsFixed ? StoneBorder : Border;
+            Color32 ground = tile.IsFixed ? Stone : Ground;
+            Color32 speck = tile.IsFixed ? StoneSpeck : GroundSpeck;
+
+            var pixels = new Color32[Size * Size];
             for (int y = 0; y < Size; y++)
             for (int x = 0; x < Size; x++)
             {
@@ -33,13 +48,32 @@ namespace ShiftScape.Game
                 if (hasPath && InPath(exits, fx, fy, 7f)) c = PathFill;
                 else if (hasPath && InPath(exits, fx, fy, 10f)) c = PathEdge;
                 else if (x < 1 || y < 1 || x >= Size - 1 || y >= Size - 1) c = Clear;
-                else if (x < 4 || y < 4 || x >= Size - 4 || y >= Size - 4) c = Border;
-                else c = (x * 7 + y * 13) % 23 == 0 ? GroundSpeck : Ground;
+                else if (x < 4 || y < 4 || x >= Size - 4 || y >= Size - 4) c = border;
+                else if (tile.IsFixed && BoltAt(x, y, out bool boltEdge)) c = boltEdge ? BoltEdge : Bolt;
+                else c = (x * 7 + y * 13) % 23 == 0 ? speck : ground;
+
+                if (tile.HasCrystal)
+                {
+                    // A diamond with a lit upper-left facet.
+                    float v = Mathf.Abs(fx) / 10f + Mathf.Abs(fy) / 14f;
+                    if (v <= 1f) c = v > 0.78f ? CrystalEdge : (fx < 0f && fy > 0f ? CrystalLight : CrystalFill);
+                }
                 pixels[y * Size + x] = c;
             }
-            Sprite sprite = Make(pixels, Size, $"Tile {exits.ToLetters()}");
-            tileCache[exits] = sprite;
+            string name = $"Tile {exits.ToLetters()}{(tile.HasCrystal ? "+" : "")}{(tile.IsFixed ? "*" : "")}";
+            Sprite sprite = Make(pixels, Size, name);
+            tileCache[key] = sprite;
             return sprite;
+        }
+
+        static bool BoltAt(int x, int y, out bool edge)
+        {
+            const float inset = 10.5f;
+            float bx = x + 0.5f < Size * 0.5f ? inset : Size - inset;
+            float by = y + 0.5f < Size * 0.5f ? inset : Size - inset;
+            float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(bx, by));
+            edge = d > 2.6f;
+            return d <= 4f;
         }
 
         // Texture space has y pointing up, so the Up arm covers the top half.

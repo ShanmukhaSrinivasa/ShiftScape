@@ -112,11 +112,21 @@ namespace ShiftScape.Core
         public Board Clone() =>
             new Board(Width, Height, Start, Goal, (Tile[])tiles.Clone(), lockedRows, lockedColumns);
 
+        public int CrystalCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (Tile t in tiles) if (t.HasCrystal) count++;
+                return count;
+            }
+        }
+
         public string StateKey()
         {
             var sb = new StringBuilder(tiles.Length);
             foreach (Tile t in tiles)
-                sb.Append((char)('A' + (int)t.Exits + (t.IsFixed ? 16 : 0)));
+                sb.Append((char)('A' + (int)t.Exits + (t.IsFixed ? 16 : 0) + (t.HasCrystal ? 32 : 0)));
             return sb.ToString();
         }
     }

@@ -5,12 +5,14 @@ namespace ShiftScape.Core
         public string Name { get; }
         public int Par { get; }
         public Board Board { get; }
+        public string Hint { get; }
 
-        public LevelData(string name, int par, Board board)
+        public LevelData(string name, int par, Board board, string hint = "")
         {
             Name = name;
             Par = par;
             Board = board;
+            Hint = hint ?? "";
         }
     }
 }

@@ -4,8 +4,26 @@ namespace ShiftScape.Core
 {
     public static class PathFinder
     {
+        // Caps the crystal search so a pathological board can't stall a frame; real levels need far less.
+        const int CrystalSearchBudget = 200000;
+
         // Two neighbouring tiles are connected only when both have an exit facing each other.
+        // With crystals on the board, the path must be a simple path that passes through all of them.
         public static List<GridPos> FindPath(Board board)
+        {
+            int crystals = board.CrystalCount;
+            return crystals == 0 ? ShortestPath(board) : PathThroughCrystals(board, crystals);
+        }
+
+        public static bool IsSolved(Board board) => FindPath(board) != null;
+
+        static bool Connected(Board board, GridPos from, Direction d, out GridPos next)
+        {
+            next = from.Neighbor(d);
+            return board[from].Connects(d) && board.Contains(next) && board[next].Connects(d.Opposite());
+        }
+
+        static List<GridPos> ShortestPath(Board board)
         {
             int width = board.Width;
             int cellCount = width * board.Height;
@@ -24,13 +42,9 @@ namespace ShiftScape.Core
                 if (current == goal) break;
 
                 var pos = new GridPos(current % width, current / width);
-                Tile tile = board[pos];
                 foreach (Direction d in DirectionExtensions.Cardinals)
                 {
-                    if (!tile.Connects(d)) continue;
-                    GridPos next = pos.Neighbor(d);
-                    if (!board.Contains(next)) continue;
-                    if (!board[next].Connects(d.Opposite())) continue;
+                    if (!Connected(board, pos, d, out GridPos next)) continue;
                     int nextIndex = next.Y * width + next.X;
                     if (previous[nextIndex] != -1) continue;
                     previous[nextIndex] = current;
@@ -48,6 +62,41 @@ namespace ShiftScape.Core
             return path;
         }
 
-        public static bool IsSolved(Board board) => FindPath(board) != null;
+        static List<GridPos> PathThroughCrystals(Board board, int totalCrystals)
+        {
+            var visited = new bool[board.Width * board.Height];
+            var path = new List<GridPos>();
+            int budget = CrystalSearchBudget;
+
+            bool Search(GridPos at, int collected)
+            {
+                if (--budget < 0) return false;
+                int index = at.Y * board.Width + at.X;
+                visited[index] = true;
+                path.Add(at);
+                if (board[at].HasCrystal) collected++;
+
+                // The walker stops at the goal, so it is only ever the last cell of the path.
+                if (at.Equals(board.Goal))
+                {
+                    if (collected == totalCrystals) return true;
+                }
+                else
+                {
+                    foreach (Direction d in DirectionExtensions.Cardinals)
+                    {
+                        if (!Connected(board, at, d, out GridPos next)) continue;
+                        if (visited[next.Y * board.Width + next.X]) continue;
+                        if (Search(next, collected)) return true;
+                    }
+                }
+
+                visited[index] = false;
+                path.RemoveAt(path.Count - 1);
+                return false;
+            }
+
+            return Search(board.Start, 0) ? path : null;
+        }
     }
 }

@@ -11,16 +11,19 @@ namespace ShiftScape.Core
     //   goal: 2,1
     //   lockedRows: 1         (optional, comma separated)
     //   lockedColumns: 0,2    (optional)
+    //   hint: Drag a column   (optional, shown in the HUD)
     //   grid:
     //   .  .  L
-    //   R  RL .
+    //   R  RL+ .
     //   .  .  .
-    // Each grid token lists a tile's exits (U, R, D, L), "." is empty, and a trailing "*" marks a fixed tile.
+    // Each grid token lists a tile's exits (U, R, D, L), "." is empty, a trailing "+" puts a crystal
+    // on the tile and a trailing "*" marks a fixed tile (both may be combined, e.g. "UD+*").
     public static class LevelParser
     {
         public static LevelData Parse(string text)
         {
             string name = "Untitled";
+            string hint = "";
             int par = 0;
             GridPos? start = null, goal = null;
             var lockedRows = new List<int>();
@@ -48,6 +51,7 @@ namespace ShiftScape.Core
                 switch (key)
                 {
                     case "name": name = value; break;
+                    case "hint": hint = value; break;
                     case "par": par = ParseInt(value, lineNumber); break;
                     case "start": start = ParsePos(value, lineNumber); break;
                     case "goal": goal = ParsePos(value, lineNumber); break;
@@ -78,7 +82,7 @@ namespace ShiftScape.Core
             for (int x = 0; x < width; x++)
                 board.SetTile(x, y, ParseTile(gridRows[y][x], name));
 
-            return new LevelData(name, par, board);
+            return new LevelData(name, par, board, hint);
         }
 
         public static string Serialize(LevelData level)
@@ -89,6 +93,7 @@ namespace ShiftScape.Core
             sb.AppendLine($"par: {level.Par}");
             sb.AppendLine($"start: {b.Start.X},{b.Start.Y}");
             sb.AppendLine($"goal: {b.Goal.X},{b.Goal.Y}");
+            if (level.Hint.Length > 0) sb.AppendLine($"hint: {level.Hint}");
 
             var rows = new List<string>();
             for (int y = 0; y < b.Height; y++) if (b.IsRowLocked(y)) rows.Add(y.ToString());
@@ -104,7 +109,7 @@ namespace ShiftScape.Core
                 for (int x = 0; x < b.Width; x++)
                 {
                     Tile t = b[x, y];
-                    tokens[x] = (t.Exits.ToLetters() + (t.IsFixed ? "*" : "")).PadRight(5);
+                    tokens[x] = (t.Exits.ToLetters() + (t.HasCrystal ? "+" : "") + (t.IsFixed ? "*" : "")).PadRight(6);
                 }
                 sb.AppendLine(string.Join("", tokens).TrimEnd());
             }
@@ -113,12 +118,18 @@ namespace ShiftScape.Core
 
         static Tile ParseTile(string token, string levelName)
         {
-            bool isFixed = token.EndsWith("*");
-            string letters = isFixed ? token.Substring(0, token.Length - 1) : token;
-            if (letters == ".") return new Tile(Direction.None, isFixed);
+            bool isFixed = false, hasCrystal = false;
+            string letters = token;
+            while (letters.Length > 1 && (letters.EndsWith("*") || letters.EndsWith("+")))
+            {
+                if (letters.EndsWith("*")) isFixed = true;
+                else hasCrystal = true;
+                letters = letters.Substring(0, letters.Length - 1);
+            }
+            if (letters == ".") return new Tile(Direction.None, isFixed, hasCrystal);
             if (!DirectionExtensions.TryParseLetters(letters, out Direction exits))
                 throw new FormatException($"Level '{levelName}': bad tile '{token}'.");
-            return new Tile(exits, isFixed);
+            return new Tile(exits, isFixed, hasCrystal);
         }
 
         static int ParseInt(string value, int lineNumber)
