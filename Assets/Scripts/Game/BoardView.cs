@@ -9,10 +9,14 @@ namespace ShiftScape.Game
     {
         const float ShiftSeconds = 0.16f;
         const float WalkSecondsPerCell = 0.14f;
+        // Sprites with different textures get different orders; sharing one made the
+        // Direct3D 12 editor draw them all with the same texture.
         const int FrameOrder = 0;
         const int TileOrder = 10;
-        const int LockOrder = 15;
-        const int MarkerOrder = 20;
+        const int LockShadeOrder = 14;
+        const int PadlockOrder = 15;
+        const int StartOrder = 19;
+        const int GoalOrder = 20;
         const int WalkerOrder = 30;
 
         static readonly Color SolvedTint = new Color(1f, 0.92f, 0.55f);
@@ -71,8 +75,8 @@ namespace ShiftScape.Game
                 HasLockedColumn = true;
             }
 
-            CreateMarker("Start", TileSpriteFactory.StartMarker, board.Start, MarkerOrder);
-            CreateMarker("Goal", TileSpriteFactory.GoalMarker, board.Goal, MarkerOrder);
+            CreateMarker("Start", TileSpriteFactory.StartMarker, board.Start, StartOrder);
+            CreateMarker("Goal", TileSpriteFactory.GoalMarker, board.Goal, GoalOrder);
             walker = CreateMarker("Walker", TileSpriteFactory.Walker, board.Start, WalkerOrder);
             walker.localScale = Vector3.one * 0.9f;
         }
@@ -221,7 +225,7 @@ namespace ShiftScape.Game
             if (isRow) center.x = 0f;
             else center.y = 0f;
             Vector2 size = isRow ? new Vector2(Width, 1f) : new Vector2(1f, Height);
-            CreateQuad("Locked", center, size, new Color(0.1f, 0.1f, 0.18f, 0.22f), LockOrder);
+            CreateQuad("Locked", center, size, new Color(0.1f, 0.1f, 0.18f, 0.22f), LockShadeOrder);
 
             float edgeX = Width * 0.5f + 0.55f;
             float edgeY = Height * 0.5f + 0.55f;
@@ -229,7 +233,7 @@ namespace ShiftScape.Game
             Vector3 b = isRow ? new Vector3(edgeX, center.y, 0f) : new Vector3(center.x, -edgeY, 0f);
             foreach (Vector3 p in new[] { a, b })
             {
-                SpriteRenderer icon = CreateSprite("Padlock", TileSpriteFactory.Padlock, p, LockOrder);
+                SpriteRenderer icon = CreateSprite("Padlock", TileSpriteFactory.Padlock, p, PadlockOrder);
                 icon.transform.localScale = Vector3.one * 0.6f;
             }
         }
