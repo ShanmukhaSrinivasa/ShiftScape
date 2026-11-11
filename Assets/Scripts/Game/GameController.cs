@@ -11,13 +11,17 @@ namespace ShiftScape.Game
         enum AppState { Title, LevelSelect, Playing }
 
         const float DragThreshold = 0.3f;
+        // Past this distance the drag shows which line it will move.
+        const float PreviewThreshold = 0.1f;
         // Padlock icons sit outside the board at the ends of locked lines and need the extra room.
         const float PaddingWithLocks = 0.95f;
         const float PaddingPlain = 0.3f;
 
         Camera cam;
+        Background background;
         BoardView view;
         GameUi ui;
+        GameAudio sound;
         PuzzleSession session;
         AppState state;
         int levelIndex;
@@ -39,10 +43,22 @@ namespace ShiftScape.Game
         void Awake()
         {
             SetUpCamera();
+            background = Background.Create(cam);
+            sound = GameAudio.Create();
+
             view = new GameObject("Board").AddComponent<BoardView>();
             view.gameObject.SetActive(false);
+            view.Stepped += sound.Step;
+            view.CrystalCollected += sound.Crystal;
 
+            UiFactory.AnyButtonClicked += sound.Click;
             ui = GameUi.Create();
+            ui.SetMuted(sound.Muted);
+            ui.MuteClicked += () =>
+            {
+                sound.ToggleMute();
+                ui.SetMuted(sound.Muted);
+            };
             ui.PlayClicked += () => LoadLevel(ProgressStore.FirstUnfinishedIndex());
             ui.LevelsClicked += ShowLevelSelect;
             ui.BackClicked += ShowTitle;
@@ -54,6 +70,11 @@ namespace ShiftScape.Game
         }
 
         void Start() => ShowTitle();
+
+        void OnDestroy()
+        {
+            if (sound != null) UiFactory.AnyButtonClicked -= sound.Click;
+        }
 
         void SetUpCamera()
         {
@@ -90,6 +111,7 @@ namespace ShiftScape.Game
             StopAllCoroutines();
             celebrating = false;
             dragging = false;
+            view.HideHighlight();
             Unsubscribe();
             session = null;
             view.gameObject.SetActive(false);
@@ -123,6 +145,7 @@ namespace ShiftScape.Game
         void OnMoveApplied(ShiftMove move)
         {
             view.AnimateShift(move);
+            sound.Slide();
             ui.SetHud(levelIndex, session);
         }
 
@@ -149,7 +172,10 @@ namespace ShiftScape.Game
             celebrating = true;
             while (view.IsBusy) yield return null;
             yield return view.WalkPath(PathFinder.FindPath(session.Board));
-            yield return new WaitForSeconds(0.25f);
+            sound.Win();
+            view.Confetti(session.Board.Goal);
+            // Long enough to enjoy the confetti before the win panel's dim overlay covers the board.
+            yield return new WaitForSeconds(1f);
             celebrating = false;
             ui.ShowWin(StarRating.For(session.MoveCount, session.Par), session.MoveCount, session.Par, newBest,
                 levelIndex == LevelLibrary.Levels.Count - 1);
@@ -202,22 +228,34 @@ namespace ShiftScape.Game
             if (!dragging || (!pointer.press.isPressed && !released)) return;
             if (view.IsBusy)
             {
-                if (released) dragging = false;
+                if (released) EndDrag();
                 return;
             }
 
             Vector3 delta = world - dragStartWorld;
-            if (delta.magnitude < DragThreshold)
-            {
-                if (released) dragging = false;
-                return;
-            }
-
             ShiftMove move = Mathf.Abs(delta.x) >= Mathf.Abs(delta.y)
                 ? ShiftMove.Row(dragCell.Y, delta.x > 0f ? 1 : -1)
                 : ShiftMove.Column(dragCell.X, delta.y < 0f ? 1 : -1);
-            session.TryShift(move);
+
+            if (delta.magnitude >= PreviewThreshold) view.ShowHighlight(move.IsRow, move.Index);
+            if (delta.magnitude < DragThreshold)
+            {
+                if (released) EndDrag();
+                return;
+            }
+
+            if (!session.TryShift(move))
+            {
+                view.Reject(move);
+                sound.Blocked();
+            }
+            EndDrag();
+        }
+
+        void EndDrag()
+        {
             dragging = false;
+            view.HideHighlight();
         }
 
         Vector3 ScreenToWorld(Vector2 screen)
@@ -248,7 +286,11 @@ namespace ShiftScape.Game
         void FitCamera()
         {
             lastScreenSize = new Vector2Int(Screen.width, Screen.height);
-            if (session == null) return;
+            if (session == null)
+            {
+                background.Fit();
+                return;
+            }
 
             float pixelsPerUnit = GameUi.PixelsPerUnit;
             float topPx = GameUi.TopBarHeight * pixelsPerUnit;
@@ -263,6 +305,7 @@ namespace ShiftScape.Game
 
             float worldPerPixel = 2f * cam.orthographicSize / Screen.height;
             cam.transform.position = new Vector3(0f, (topPx - bottomPx) * 0.5f * worldPerPixel, -10f);
+            background.Fit();
         }
     }
 }

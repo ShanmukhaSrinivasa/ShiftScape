@@ -1,7 +1,9 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using ShiftScape.Core;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 namespace ShiftScape.Game
 {
@@ -9,17 +11,29 @@ namespace ShiftScape.Game
     {
         const float ShiftSeconds = 0.16f;
         const float WalkSecondsPerCell = 0.14f;
+        const float RejectSeconds = 0.28f;
         // Sprites with different textures get different orders; sharing one made the
         // Direct3D 12 editor draw them all with the same texture.
         const int FrameOrder = 0;
         const int TileOrder = 10;
         const int LockShadeOrder = 14;
         const int PadlockOrder = 15;
+        const int HighlightOrder = 16;
         const int StartOrder = 19;
         const int GoalOrder = 20;
         const int WalkerOrder = 30;
+        const int ConfettiOrder = 40;
 
         static readonly Color SolvedTint = new Color(1f, 0.92f, 0.55f);
+        static readonly Color[] ConfettiColors =
+        {
+            new Color(1f, 0.79f, 0.2f), new Color(0.35f, 0.84f, 0.93f), new Color(0.93f, 0.41f, 0.25f),
+            new Color(0.55f, 0.85f, 0.45f), Color.white,
+        };
+
+        // Raised while the walker follows the solved path, so the game can play sounds.
+        public event Action<int> Stepped;
+        public event Action<int> CrystalCollected;
 
         sealed class TileView
         {
@@ -32,6 +46,9 @@ namespace ShiftScape.Game
         TileView[] grid;
         Transform content;
         Transform walker;
+        Transform highlight;
+        Dictionary<(bool isRow, int index), List<Transform>> padlocks;
+        int crystalsCollected;
 
         public bool IsBusy { get; private set; }
         public int Width => board.Width;
@@ -61,6 +78,13 @@ namespace ShiftScape.Game
             for (int x = 0; x < Width; x++)
                 grid[y * Width + x] = CreateTile(board[x, y], CellLocal(x, y));
 
+            SpriteRenderer highlightRenderer = CreateSprite("Highlight", TileSpriteFactory.White, Vector3.zero, HighlightOrder);
+            highlightRenderer.color = new Color(1f, 1f, 1f, 0.2f);
+            highlight = highlightRenderer.transform;
+            highlight.gameObject.SetActive(false);
+
+            padlocks = new Dictionary<(bool, int), List<Transform>>();
+            crystalsCollected = 0;
             HasLockedRow = HasLockedColumn = false;
             for (int y = 0; y < Height; y++)
             {
@@ -97,6 +121,49 @@ namespace ShiftScape.Game
 
         public void AnimateShift(ShiftMove move) => StartCoroutine(ShiftRoutine(move));
 
+        public void ShowHighlight(bool isRow, int index)
+        {
+            highlight.gameObject.SetActive(true);
+            highlight.localPosition = isRow ? new Vector3(0f, CellLocal(0, index).y, 0f) : new Vector3(CellLocal(index, 0).x, 0f, 0f);
+            highlight.localScale = isRow ? new Vector3(Width, 1f, 1f) : new Vector3(1f, Height, 1f);
+        }
+
+        public void HideHighlight()
+        {
+            if (highlight != null) highlight.gameObject.SetActive(false);
+        }
+
+        // A refused move nudges its line back and forth, and wiggles the padlocks if the line is locked.
+        public void Reject(ShiftMove move)
+        {
+            if (!IsBusy) StartCoroutine(RejectRoutine(move));
+        }
+
+        IEnumerator RejectRoutine(ShiftMove move)
+        {
+            IsBusy = true;
+            int length = move.IsRow ? Width : Height;
+            var tiles = new TileView[length];
+            for (int i = 0; i < length; i++) tiles[i] = grid[CellIndex(move, i)];
+            padlocks.TryGetValue((move.IsRow, move.Index), out List<Transform> locks);
+            Vector3 axis = move.IsRow ? new Vector3(move.Step, 0f, 0f) : new Vector3(0f, -move.Step, 0f);
+
+            for (float t = 0f; t < 1f; t += Time.deltaTime / RejectSeconds)
+            {
+                float wobble = Mathf.Sin(t * Mathf.PI * 4f) * (1f - t);
+                for (int i = 0; i < length; i++)
+                    tiles[i].Transform.localPosition = LineLocal(move, i) + axis * (0.09f * wobble);
+                if (locks != null)
+                    foreach (Transform l in locks) l.localRotation = Quaternion.Euler(0f, 0f, 22f * wobble);
+                yield return null;
+            }
+
+            for (int i = 0; i < length; i++) tiles[i].Transform.localPosition = LineLocal(move, i);
+            if (locks != null)
+                foreach (Transform l in locks) l.localRotation = Quaternion.identity;
+            IsBusy = false;
+        }
+
         public IEnumerator WalkPath(List<GridPos> path)
         {
             IsBusy = true;
@@ -111,10 +178,49 @@ namespace ShiftScape.Game
                     yield return null;
                 }
                 walker.localPosition = to;
+                Stepped?.Invoke(i);
                 Collect(path[i]);
             }
             foreach (GridPos p in path) grid[p.Y * Width + p.X].Renderer.color = SolvedTint;
             IsBusy = false;
+        }
+
+        public void Confetti(GridPos cell) => StartCoroutine(ConfettiRoutine(CellLocal(cell.X, cell.Y)));
+
+        IEnumerator ConfettiRoutine(Vector3 origin)
+        {
+            const int count = 40;
+            const float seconds = 1.3f;
+            var pieces = new Transform[count];
+            var renderers = new SpriteRenderer[count];
+            var velocity = new Vector3[count];
+            var spin = new float[count];
+            for (int i = 0; i < count; i++)
+            {
+                renderers[i] = CreateSprite("Confetti", TileSpriteFactory.White, origin, ConfettiOrder);
+                renderers[i].color = ConfettiColors[i % ConfettiColors.Length];
+                pieces[i] = renderers[i].transform;
+                pieces[i].localScale = new Vector3(0.11f, 0.17f, 1f);
+                float angle = Random.Range(25f, 155f) * Mathf.Deg2Rad;
+                velocity[i] = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f) * Random.Range(3f, 6.5f);
+                spin[i] = Random.Range(-540f, 540f);
+            }
+
+            for (float t = 0f; t < seconds; t += Time.deltaTime)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    velocity[i] += Vector3.down * (9f * Time.deltaTime);
+                    velocity[i] *= 1f - 1.2f * Time.deltaTime;
+                    pieces[i].localPosition += velocity[i] * Time.deltaTime;
+                    pieces[i].Rotate(0f, 0f, spin[i] * Time.deltaTime);
+                    Color c = renderers[i].color;
+                    c.a = Mathf.Clamp01((seconds - t) / 0.4f);
+                    renderers[i].color = c;
+                }
+                yield return null;
+            }
+            foreach (Transform p in pieces) Destroy(p.gameObject);
         }
 
         // Only the visuals change; the board keeps its crystals so restart and undo stay consistent.
@@ -125,6 +231,7 @@ namespace ShiftScape.Game
             tile.Data = tile.Data.WithoutCrystal;
             tile.Renderer.sprite = TileSpriteFactory.Tile(tile.Data);
             StartCoroutine(Pop(tile.Transform));
+            CrystalCollected?.Invoke(crystalsCollected++);
         }
 
         static IEnumerator Pop(Transform target)
@@ -231,11 +338,14 @@ namespace ShiftScape.Game
             float edgeY = Height * 0.5f + 0.55f;
             Vector3 a = isRow ? new Vector3(-edgeX, center.y, 0f) : new Vector3(center.x, edgeY, 0f);
             Vector3 b = isRow ? new Vector3(edgeX, center.y, 0f) : new Vector3(center.x, -edgeY, 0f);
+            var icons = new List<Transform>(2);
             foreach (Vector3 p in new[] { a, b })
             {
                 SpriteRenderer icon = CreateSprite("Padlock", TileSpriteFactory.Padlock, p, PadlockOrder);
                 icon.transform.localScale = Vector3.one * 0.6f;
+                icons.Add(icon.transform);
             }
+            padlocks[(isRow, index)] = icons;
         }
 
         void CreateQuad(string name, Vector3 local, Vector2 size, Color color, int order)

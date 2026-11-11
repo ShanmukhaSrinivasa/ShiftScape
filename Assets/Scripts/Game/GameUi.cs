@@ -18,7 +18,7 @@ namespace ShiftScape.Game
         static readonly Vector2 GridCell = new Vector2(140f, 165f);
         const float GridSpacing = 18f;
 
-        public event Action PlayClicked, LevelsClicked, BackClicked;
+        public event Action PlayClicked, LevelsClicked, BackClicked, MuteClicked;
         public event Action UndoClicked, RestartClicked, NextClicked, ReplayClicked;
         public event Action<int> LevelChosen;
 
@@ -32,6 +32,7 @@ namespace ShiftScape.Game
         RectTransform levelGrid;
         Image[] winStars;
         Button undoButton;
+        Image muteIcon;
 
         public static float PixelsPerUnit => Mathf.Min(Screen.width, Screen.height) / ReferenceSize;
 
@@ -53,6 +54,7 @@ namespace ShiftScape.Game
             BuildLevelSelect();
             BuildHud();
             BuildWin();
+            BuildMuteButton();
         }
 
         static void EnsureEventSystem()
@@ -103,6 +105,17 @@ namespace ShiftScape.Game
         }
 
         public void HideWin() => win.SetActive(false);
+
+        public void SetMuted(bool muted) => muteIcon.sprite = muted ? UiSprites.SpeakerOff : UiSprites.SpeakerOn;
+
+        // Lives outside the screen groups so it stays in the top-right corner on every screen.
+        void BuildMuteButton()
+        {
+            Button button = UiFactory.NewButton("Mute", root, null, UiFactory.Secondary, UiFactory.Ink, 0, () => MuteClicked?.Invoke());
+            button.GetComponent<RectTransform>().Place(new Vector2(1f, 1f), new Vector2(-70f, -70f), new Vector2(96f, 96f));
+            muteIcon = UiFactory.NewImage("Icon", button.transform, UiSprites.SpeakerOn, UiFactory.Ink);
+            muteIcon.rectTransform.Place(new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(72f, 72f));
+        }
 
         void ShowOnly(GameObject screen)
         {

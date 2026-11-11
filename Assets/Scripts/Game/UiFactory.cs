@@ -14,6 +14,9 @@ namespace ShiftScape.Game
         public static readonly Color StarOn = new Color(1f, 0.79f, 0.2f);
         public static readonly Color StarOff = new Color(0.14f, 0.2f, 0.26f, 0.18f);
 
+        // Fired for every button press, so the game can play one click sound for all of them.
+        public static event Action AnyButtonClicked;
+
         static Font font;
 
         public static Font Font => font != null ? font : font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -81,6 +84,7 @@ namespace ShiftScape.Game
             colors.disabledColor = new Color(0.75f, 0.75f, 0.75f, 0.5f);
             colors.fadeDuration = 0.08f;
             button.colors = colors;
+            button.onClick.AddListener(() => AnyButtonClicked?.Invoke());
             if (onClick != null) button.onClick.AddListener(() => onClick());
             if (!string.IsNullOrEmpty(text))
                 NewLabel("Label", image.transform, text, fontSize, textColor, TextAnchor.MiddleCenter, FontStyle.Bold).rectTransform.Stretch();
